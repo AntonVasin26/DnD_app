@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вращающаяся головоломка</title>
+    <style>
+        .shape-overlay {
+            fill: rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            transition: fill 0.15s;
+        }
+        .shape-overlay:hover {
+            fill: rgba(255, 255, 255, 0.22);
+        }
+        .value-text {
+            font-size: 20px;
+            font-weight: bold;
+            fill: #ffffff;
+        }
+        .target-box {
+            fill: #f5f5f5;
+            stroke: #888888;
+        }
+        .target-label {
+            font-size: 13px;
+            fill: #555555;
+        }
+        .sum-text {
+            font-size: 15px;
+            font-weight: bold;
+        }
+        .sum-ok {
+            fill: #1a8a3c;
+        }
+        .sum-wrong {
+            fill: #333333;
+        }
+        #texture-test {
+            width: 853px;
+            height: 480px;
+            background-image: url("textures/Tiles_Roughness.jpg");
+            background-repeat: repeat;
+            background-size: 512px 512px;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Бабочка из двух треугольников</h1>
+    <p>Клик по треугольнику — поворот его вершин на 1 шаг.</p>
+
+    <div id="texture-test">
+        <svg width="853" height="480" viewBox="0 0 853 480">
+
+            <line x1="432" y1="330" x2="560" y2="330" stroke="#dddddd" stroke-width="1.5" stroke-dasharray="6 4" />
+            <line x1="432" y1="150" x2="560" y2="150" stroke="#dddddd" stroke-width="1.5" stroke-dasharray="6 4" />
+
+            <rect class="target-box" x="560" y="295" width="240" height="70" rx="8" />
+            <text class="target-label" x="680" y="317" text-anchor="middle">Цель: <tspan id="target-diag1">9</tspan></text>
+            <text id="sum-diag1" class="sum-text sum-ok" x="680" y="341" text-anchor="middle">Сумма: 9</text>
+
+            <rect class="target-box" x="560" y="115" width="240" height="70" rx="8" />
+            <text class="target-label" x="680" y="137" text-anchor="middle">Цель: <tspan id="target-diag2">9</tspan></text>
+            <text id="sum-diag2" class="sum-text sum-ok" x="680" y="161" text-anchor="middle">Сумма: 9</text>
+
+            <polygon class="shape-overlay" points="120,150 120,330 276,240"
+                     onclick="rotateShape('left', 1)" />
+            <polygon class="shape-overlay" points="432,150 432,330 276,240"
+                     onclick="rotateShape('right', 1)" />
+
+            <line x1="120" y1="150" x2="120" y2="330" stroke="white" stroke-width="2" />
+            <line x1="120" y1="330" x2="276" y2="240" stroke="white" stroke-width="2" />
+            <line x1="276" y1="240" x2="120" y2="150" stroke="white" stroke-width="2" />
+
+            <line x1="432" y1="150" x2="432" y2="330" stroke="white" stroke-width="2" />
+            <line x1="432" y1="330" x2="276" y2="240" stroke="white" stroke-width="2" />
+            <line x1="276" y1="240" x2="432" y2="150" stroke="white" stroke-width="2" />
+
+            <circle cx="120" cy="150" r="20" fill="lightblue" />
+            <circle cx="120" cy="330" r="20" fill="lightsalmon" />
+            <circle cx="276" cy="240" r="20" fill="plum" />
+            <circle cx="432" cy="150" r="20" fill="lightblue" />
+            <circle cx="432" cy="330" r="20" fill="lightsalmon" />
+
+            <text id="text-A" class="value-text" x="120" y="150" text-anchor="middle" dominant-baseline="middle">1</text>
+            <text id="text-D" class="value-text" x="120" y="330" text-anchor="middle" dominant-baseline="middle">4</text>
+            <text id="text-C" class="value-text" x="276" y="240" text-anchor="middle" dominant-baseline="middle">3</text>
+            <text id="text-B" class="value-text" x="432" y="150" text-anchor="middle" dominant-baseline="middle">2</text>
+            <text id="text-E" class="value-text" x="432" y="330" text-anchor="middle" dominant-baseline="middle">5</text>
+
+        </svg>
+    </div>
+
+    <script>
+        let values = { A: 1, B: 2, C: 3, D: 4, E: 5 };
+
+        const shapes = {
+            left: ["A", "D", "C"],
+            right: ["B", "E", "C"],
+        };
+
+        const lines = {
+            diag1: { pointIds: ["A", "C", "E"], target: 9 },
+            diag2: { pointIds: ["B", "C", "D"], target: 9 },
+        };
+
+        function rotateShape(shapeId, direction) {
+            const pointIds = shapes[shapeId];
+            const n = pointIds.length;
+
+            const currentValues = pointIds.map(id => values[id]);
+
+            const newValues = new Array(n);
+            for (let i = 0; i < n; i++) {
+                const newPosition = ((i + direction) % n + n) % n;
+                newValues[newPosition] = currentValues[i];
+            }
+
+            pointIds.forEach((id, index) => {
+                values[id] = newValues[index];
+            });
+
+            render();
+        }
+
+        function render() {
+            for (const id in values) {
+                document.getElementById("text-" + id).textContent = values[id];
+            }
+
+            for (const lineId in lines) {
+                const line = lines[lineId];
+                const sum = line.pointIds.reduce((total, id) => total + values[id], 0);
+
+                const sumElement = document.getElementById("sum-" + lineId);
+                sumElement.textContent = "Сумма: " + sum;
+
+                if (sum === line.target) {
+                    sumElement.classList.add("sum-ok");
+                    sumElement.classList.remove("sum-wrong");
+                } else {
+                    sumElement.classList.add("sum-wrong");
+                    sumElement.classList.remove("sum-ok");
+                }
+            }
+        }
+
+        render();
+    </script>
+
+</body>
+</html>
