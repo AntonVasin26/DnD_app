@@ -15,29 +15,61 @@
         .shape-group {
             transition: transform 1.6s ease;
         }
+        .circles-layer {
+            /* Декоративный слой — не должен перехватывать клики,
+               иначе клик прямо по кружку не сработает на треугольник. */
+            pointer-events: none;
+        }
         .value-text {
             font-size: 20px;
             font-weight: bold;
             fill: #ffffff;
             transition: opacity 0.25s ease;
         }
-        .target-box {
-            fill: #f5f5f5;
-            stroke: #888888;
+        .diagonal-overlay {
+            /* Отдельная прямая поверх всего (НЕ часть самих рёбер треугольника) — основная
+               часть, тянется от одной вершины через центральную точку до другой.
+               По умолчанию невидима, появляется только когда сумма на этой диагонали верна. */
+            fill: none;
+            stroke: #fff6d9;
+            stroke-width: 6;
+            stroke-linecap: round;
+            opacity: 0;
+            filter: drop-shadow(0 0 6px rgba(255, 246, 217, 0.9));
+            pointer-events: none;
+            transition: opacity 0.3s ease;
         }
-        .target-label {
-            font-size: 13px;
-            fill: #555555;
+        .diagonal-overlay-extension {
+            /* То же самое, но тоньше и тусклее — это часть прямой, которая выходит ЗА пределы
+               самой фигуры, тянется к надписи "текущее/цель". */
+            fill: none;
+            stroke: #fff6d9;
+            stroke-width: 0.6;
+            stroke-linecap: round;
+            opacity: 0;
+            filter: drop-shadow(0 0 2px rgba(255, 246, 217, 0.6));
+            pointer-events: none;
+            transition: opacity 0.3s ease;
         }
-        .sum-text {
-            font-size: 15px;
+        .diagonal-overlay-extension.diagonal-overlay-ok {
+            opacity: 0.45;
+        }
+        .diagonal-overlay-ok {
+            opacity: 1;
+        }
+        .ratio-text {
+            font-size: 30px;
             font-weight: bold;
+            fill: #ffffff;
+            stroke: rgba(0, 0, 0, 0.55);
+            stroke-width: 4;
+            paint-order: stroke fill;
+            opacity: 0.35;
+            transition: opacity 0.3s ease, filter 0.3s ease;
         }
         .sum-ok {
-            fill: #1a8a3c;
-        }
-        .sum-wrong {
-            fill: #333333;
+            opacity: 1;
+            filter: drop-shadow(0 0 6px rgba(255, 246, 217, 0.9));
         }
         #texture-test {
             width: 853px;
@@ -58,39 +90,76 @@
     <div id="texture-test">
         <svg width="853" height="480" viewBox="0 0 853 480">
 
-            <line x1="432" y1="330" x2="560" y2="330" stroke="#dddddd" stroke-width="1.5" stroke-dasharray="6 4" />
-            <line x1="432" y1="150" x2="560" y2="150" stroke="#dddddd" stroke-width="1.5" stroke-dasharray="6 4" />
+            <defs>
+                <!-- Градиент подсветки: прозрачный внутри (там всё равно закроет сам кружок),
+                     яркий прямо на границе кружка (r=20 из 34 ≈ 59%), затем плавно гаснет наружу. -->
+                <radialGradient id="circle-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#fff6d9" stop-opacity="0" />
+                    <stop offset="58%" stop-color="#fff6d9" stop-opacity="0" />
+                    <stop offset="65%" stop-color="#fff6d9" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="#fff6d9" stop-opacity="0" />
+                </radialGradient>
+            </defs>
 
-            <rect class="target-box" x="560" y="295" width="240" height="70" rx="8" />
-            <text class="target-label" x="680" y="317" text-anchor="middle">Цель: <tspan id="target-diag1">9</tspan></text>
-            <text id="sum-diag1" class="sum-text sum-ok" x="680" y="341" text-anchor="middle">Сумма: 9</text>
-
-            <rect class="target-box" x="560" y="115" width="240" height="70" rx="8" />
-            <text class="target-label" x="680" y="137" text-anchor="middle">Цель: <tspan id="target-diag2">9</tspan></text>
-            <text id="sum-diag2" class="sum-text sum-ok" x="680" y="161" text-anchor="middle">Сумма: 9</text>
-
-            <!-- ВРАЩАЮЩИЕСЯ РАМКИ: только линии + кружки, БЕЗ текста внутри -->
-            <g id="shape-left" class="shape-group">
+            <!-- СЛОЙ 1 (нижний): РЁБРА обеих фигур. Рисуются первыми, значит
+                 лежат под всем, что нарисовано позже — в т.ч. под кружками
+                 ДРУГОЙ фигуры в общей точке C. -->
+            <g id="shape-left-edges" class="shape-group">
                 <polygon class="shape-overlay" points="120,150 120,330 276,240"
                          onclick="rotateShape('left', 1)" />
                 <line x1="120" y1="150" x2="120" y2="330" stroke="#16213e" stroke-width="8" />
                 <line x1="120" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
                 <line x1="276" y1="240" x2="120" y2="150" stroke="#16213e" stroke-width="8" />
-                <circle cx="120" cy="150" r="20" fill="#16213e" />
-                <circle cx="120" cy="330" r="20" fill="#16213e" />
-                <circle cx="276" cy="240" r="20" fill="#16213e" />
             </g>
 
-            <g id="shape-right" class="shape-group">
+            <g id="shape-right-edges" class="shape-group">
                 <polygon class="shape-overlay" points="432,150 432,330 276,240"
                          onclick="rotateShape('right', 1)" />
                 <line x1="432" y1="150" x2="432" y2="330" stroke="#16213e" stroke-width="8" />
                 <line x1="432" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
                 <line x1="276" y1="240" x2="432" y2="150" stroke="#16213e" stroke-width="8" />
+            </g>
+
+            <!-- СЛОЙ 2 (верхний): КРУЖКИ + ПОДСВЕТКА обеих фигур. Рисуются
+                 после слоя рёбер, значит лежат поверх ВСЕХ рёбер, включая
+                 рёбра соседней фигуры. pointer-events:none — клики проходят
+                 "сквозь" них к слою рёбер ниже. -->
+            <g id="shape-left-circles" class="shape-group circles-layer">
+                <circle cx="120" cy="150" r="34" fill="url(#circle-glow)" />
+                <circle cx="120" cy="330" r="34" fill="url(#circle-glow)" />
+                <circle cx="276" cy="240" r="34" fill="url(#circle-glow)" />
+                <circle cx="120" cy="150" r="20" fill="#16213e" />
+                <circle cx="120" cy="330" r="20" fill="#16213e" />
+                <circle cx="276" cy="240" r="20" fill="#16213e" />
+            </g>
+
+            <g id="shape-right-circles" class="shape-group circles-layer">
+                <circle cx="432" cy="150" r="34" fill="url(#circle-glow)" />
+                <circle cx="432" cy="330" r="34" fill="url(#circle-glow)" />
+                <circle cx="276" cy="240" r="34" fill="url(#circle-glow)" />
                 <circle cx="432" cy="150" r="20" fill="#16213e" />
                 <circle cx="432" cy="330" r="20" fill="#16213e" />
                 <circle cx="276" cy="240" r="20" fill="#16213e" />
             </g>
+
+            <!-- СЛОЙ 3: прямые-накладки поверх всего. Теперь каждая продолжена за одну из
+                 своих крайних точек, чтобы дотянуться до места, где стоит надпись
+                 "текущее/цель". Невидимы по умолчанию, появляются только когда сумма
+                 совпадает с целью. Геометрически лежат там же, где и рёбра треугольников,
+                 но это СВОЙ ОТДЕЛЬНЫЙ элемент, не часть вращающейся рамки — точки
+                 A/B/C/D/E физически никогда не двигаются (меняется только число в них),
+                 так что этим линиям не нужно никакого трансформа вообще. -->
+            <!-- СЛОЙ 3А: основная часть диагонали (вершина-вершина-вершина) — толще. -->
+            <polyline id="diagonal-overlay-diag1" class="diagonal-overlay" points="120,150 276,240 432,330" />
+            <polyline id="diagonal-overlay-diag2" class="diagonal-overlay" points="432,150 276,240 120,330" />
+
+            <!-- СЛОЙ 3Б: продолжение за крайнюю вершину до надписи — тоньше. -->
+            <polyline id="diagonal-overlay-ext-diag1" class="diagonal-overlay-extension" points="432,330 510,375" />
+            <polyline id="diagonal-overlay-ext-diag2" class="diagonal-overlay-extension" points="510,105 432,150" />
+
+            <!-- Надписи "текущее/цель" на концах продолжений диагоналей. -->
+            <text id="ratio-diag1" class="ratio-text sum-ok" x="510" y="375" text-anchor="middle" dominant-baseline="middle">9/9</text>
+            <text id="ratio-diag2" class="ratio-text sum-ok" x="510" y="105" text-anchor="middle" dominant-baseline="middle">9/9</text>
 
             <!-- ЦИФРЫ: НЕЗАВИСИМЫ от рамок, всегда стоят на своих законных
                  местах и никогда не вращаются. По одной на каждую ТОЧКУ
@@ -149,6 +218,14 @@
             return `translate(${px}px, ${py}px) rotate(${angleDeg}deg) translate(${-px}px, ${-py}px)`;
         }
 
+        // Каждая фигура физически состоит из ДВУХ SVG-групп (рёбра и кружки,
+        // см. разметку выше — они разделены ради правильного порядка слоёв).
+        // Обе должны поворачиваться совершенно одинаково и одновременно.
+        function setShapeTransform(shapeId, transformStr) {
+            document.getElementById("shape-" + shapeId + "-edges").style.transform = transformStr;
+            document.getElementById("shape-" + shapeId + "-circles").style.transform = transformStr;
+        }
+
         // Поворачивает точку (x,y) вокруг центра (cx,cy) на angleDeg — та же
         // математика, что использует CSS rotate().
         function rotatePoint(x, y, cx, cy, angleDeg) {
@@ -168,6 +245,28 @@
 
             const pointIds = shapes[shapeId];
 
+            // ПРЕЖДЕ любой анимации: вычисляем, какими будут значения ПОСЛЕ
+            // поворота (не меняя настоящие values — это чистое предсказание).
+            // Если какая-то диагональ сейчас горит, а после поворота перестанет совпадать
+            // с целью — гасим её ПРЯМО СЕЙЧАС, до начала анимации поворота.
+            const predictedValues = computeRotatedValues(shapeId, direction, values);
+
+            for (const lineId in lines) {
+                const line = lines[lineId];
+                const currentSum = line.pointIds.reduce((total, id) => total + values[id], 0);
+                const predictedSum = line.pointIds.reduce((total, id) => total + predictedValues[id], 0);
+
+                const wasOk = currentSum === line.target;
+                const willBeOk = predictedSum === line.target;
+
+                if (wasOk && !willBeOk) {
+                    document.getElementById("diagonal-overlay-" + lineId).classList.remove("diagonal-overlay-ok");
+                    document.getElementById("diagonal-overlay-ext-" + lineId).classList.remove("diagonal-overlay-ok");
+                    const ratioElement = document.getElementById("ratio-" + lineId);
+                    ratioElement.classList.remove("sum-ok");
+                }
+            }
+
             // Этап 1: плавно гасим цифры этой фигуры (0.25с). Гасить плавно теперь
             // безопасно — текст больше не связан с вращающейся рамкой,
             // ему некуда "ехать" вместе с ней без компенсации.
@@ -180,8 +279,7 @@
                 const angle = rotationState[shapeId];
 
                 const [scx, scy] = shapeCentroids[shapeId];
-                document.getElementById("shape-" + shapeId).style.transform =
-                    rotationAroundPoint(scx, scy, angle);
+                setShapeTransform(shapeId, rotationAroundPoint(scx, scy, angle));
 
                 applyDataRotation(shapeId, direction);
 
@@ -210,15 +308,16 @@
             });
         }
 
-        function applyDataRotation(shapeId, direction) {
+        // Чистая функция: по заданному исходному состоянию чисел возвращает НОВОЕ состояние
+        // после поворота заданной фигуры — НЕ трогая никаких глобальных переменных.
+        // Используется и для предсказания (до анимации), и для реального применения.
+        function computeRotatedValues(shapeId, direction, sourceValues) {
             const pointIds = shapes[shapeId];
             const [cx, cy] = shapeCentroids[shapeId];
             const angle = direction * 120;
 
-            // Для каждой вершины этой фигуры вычисляем, где она физически
-            // окажется после поворота, и находим ближайшую из трёх вершин —
-            // туда и должно "переехать" число.
-            const newValues = {};
+            const updatedValues = Object.assign({}, sourceValues);
+            const newAssignments = {};
 
             pointIds.forEach(sourceId => {
                 const [ox, oy] = VERTEX_COORDS[sourceId];
@@ -235,10 +334,15 @@
                     }
                 });
 
-                newValues[closestId] = values[sourceId];
+                newAssignments[closestId] = sourceValues[sourceId];
             });
 
-            Object.assign(values, newValues);
+            Object.assign(updatedValues, newAssignments);
+            return updatedValues;
+        }
+
+        function applyDataRotation(shapeId, direction) {
+            values = computeRotatedValues(shapeId, direction, values);
         }
 
         function render() {
@@ -250,15 +354,19 @@
                 const line = lines[lineId];
                 const sum = line.pointIds.reduce((total, id) => total + values[id], 0);
 
-                const sumElement = document.getElementById("sum-" + lineId);
-                sumElement.textContent = "Сумма: " + sum;
+                const ratioElement = document.getElementById("ratio-" + lineId);
+                const overlayElement = document.getElementById("diagonal-overlay-" + lineId);
+                const overlayExtElement = document.getElementById("diagonal-overlay-ext-" + lineId);
+                ratioElement.textContent = sum + "/" + line.target;
 
                 if (sum === line.target) {
-                    sumElement.classList.add("sum-ok");
-                    sumElement.classList.remove("sum-wrong");
+                    ratioElement.classList.add("sum-ok");
+                    overlayElement.classList.add("diagonal-overlay-ok");
+                    overlayExtElement.classList.add("diagonal-overlay-ok");
                 } else {
-                    sumElement.classList.add("sum-wrong");
-                    sumElement.classList.remove("sum-ok");
+                    ratioElement.classList.remove("sum-ok");
+                    overlayElement.classList.remove("diagonal-overlay-ok");
+                    overlayExtElement.classList.remove("diagonal-overlay-ok");
                 }
             }
         }
@@ -270,8 +378,7 @@
         // так же гладко, как и все последующие.
         Object.keys(shapeCentroids).forEach(shapeId => {
             const [cx, cy] = shapeCentroids[shapeId];
-            document.getElementById("shape-" + shapeId).style.transform =
-                rotationAroundPoint(cx, cy, 0);
+            setShapeTransform(shapeId, rotationAroundPoint(cx, cy, 0));
         });
     </script>
 
