@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <title>Вращающаяся головоломка</title>
     <style>
+        body {
+            background: #0b0d14;
+            color: #e8e8ec;
+            font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+        }
+        .level-section {
+            margin-bottom: 36px;
+        }
+        .level-section h2 {
+            margin-bottom: 4px;
+        }
         .shape-overlay {
             fill: rgba(22, 33, 62, 0.85);
             cursor: pointer;
@@ -27,13 +38,14 @@
             transition: opacity 0.25s ease;
         }
         .diagonal-overlay {
-            /* Отдельная прямая поверх всего (НЕ часть самих рёбер треугольника) — основная
-               часть, тянется от одной вершины через центральную точку до другой.
-               По умолчанию невидима, появляется только когда сумма на этой диагонали верна. */
+            /* Отдельная прямая поверх всего (НЕ часть самих рёбер фигур) — основная
+               часть, тянется через точки, входящие в условие суммы этой линии.
+               По умолчанию невидима, появляется только когда сумма верна. */
             fill: none;
             stroke: #fff6d9;
             stroke-width: 6;
             stroke-linecap: round;
+            stroke-linejoin: round;
             opacity: 0;
             filter: drop-shadow(0 0 6px rgba(255, 246, 217, 0.9));
             pointer-events: none;
@@ -71,314 +83,751 @@
             opacity: 1;
             filter: drop-shadow(0 0 6px rgba(255, 246, 217, 0.9));
         }
-        #texture-test {
-            width: 853px;
-            height: 480px;
+        /* Курсоры других игроков (presence) — слой добавляется в самом
+           конце SVG-разметки КАЖДОГО уровня, поэтому рисуется последним и
+           лежит поверх всего остального именно НА СВОЁМ уровне.
+           pointer-events: none на всём слое — иначе чужой курсор мог бы
+           перехватывать твои собственные клики. */
+        [id^="remote-cursors-layer-"] {
+            pointer-events: none;
+        }
+        .cursor-dot {
+            stroke: #ffffff;
+            stroke-width: 1.5;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+        }
+        .cursor-ripple-anim {
+            fill: none;
+            stroke-width: 3;
+            animation: cursor-ripple 0.5s ease-out forwards;
+        }
+        /* "Нажатие" (клик) другого игрока — расширяющееся и гаснущее
+           кольцо вокруг его курсора в момент клика. */
+        @keyframes cursor-ripple {
+            from { r: 7; opacity: 0.9; }
+            to   { r: 26; opacity: 0; }
+        }
+        /* Фон — ОДИНАКОВЫЙ для всех уровней (та же текстура, тот же
+           повтор/размер тайла, та же рамка), меняется только размер под
+           геометрию конкретного уровня. */
+        #texture-test-butterfly, #texture-test-pentagon, #texture-test-square {
             background-image: url("textures/Tiles_Roughness.jpg");
             background-repeat: repeat;
             background-size: 512px 512px;
             border: 2px solid #333;
             margin-bottom: 20px;
         }
+        #texture-test-butterfly {
+            width: 853px;
+            height: 480px;
+        }
+        #texture-test-pentagon {
+            width: 560px;
+            height: 730px;
+        }
+        #texture-test-square {
+            width: 560px;
+            height: 600px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Бабочка из двух треугольников</h1>
-    <p>Клик по треугольнику — он физически поворачивается на 1 шаг.</p>
+    <h1>Вращающаяся головоломка — все созвездия на одной странице</h1>
 
-    <div id="texture-test">
-        <svg width="853" height="480" viewBox="0 0 853 480">
+    <section class="level-section">
+        <h2>Созвездие Бабочки</h2>
+        <p>Клик по треугольнику — он физически поворачивается на 1 шаг.</p>
 
-            <defs>
-                <!-- Градиент подсветки: прозрачный внутри (там всё равно закроет сам кружок),
-                     яркий прямо на границе кружка (r=20 из 34 ≈ 59%), затем плавно гаснет наружу. -->
-                <radialGradient id="circle-glow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="#fff6d9" stop-opacity="0" />
-                    <stop offset="58%" stop-color="#fff6d9" stop-opacity="0" />
-                    <stop offset="65%" stop-color="#fff6d9" stop-opacity="0.6" />
-                    <stop offset="100%" stop-color="#fff6d9" stop-opacity="0" />
-                </radialGradient>
-            </defs>
+        <div id="texture-test-butterfly">
+            <svg id="puzzle-svg-butterfly" width="853" height="480" viewBox="0 0 853 480">
 
-            <!-- СЛОЙ 1 (нижний): РЁБРА обеих фигур. Рисуются первыми, значит
-                 лежат под всем, что нарисовано позже — в т.ч. под кружками
-                 ДРУГОЙ фигуры в общей точке C. -->
-            <g id="shape-left-edges" class="shape-group">
-                <polygon class="shape-overlay" points="120,150 120,330 276,240"
-                         onclick="rotateShape('left', 1)" />
-                <line x1="120" y1="150" x2="120" y2="330" stroke="#16213e" stroke-width="8" />
-                <line x1="120" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
-                <line x1="276" y1="240" x2="120" y2="150" stroke="#16213e" stroke-width="8" />
-            </g>
+                <defs>
+                    <!-- Градиент подсветки: прозрачный внутри (там всё равно закроет сам кружок),
+                         яркий прямо на границе кружка (r=20 из 34 ≈ 59%), затем плавно гаснет наружу. -->
+                    <radialGradient id="circle-glow-butterfly" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="58%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="65%" stop-color="#fff6d9" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#fff6d9" stop-opacity="0" />
+                    </radialGradient>
+                </defs>
 
-            <g id="shape-right-edges" class="shape-group">
-                <polygon class="shape-overlay" points="432,150 432,330 276,240"
-                         onclick="rotateShape('right', 1)" />
-                <line x1="432" y1="150" x2="432" y2="330" stroke="#16213e" stroke-width="8" />
-                <line x1="432" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
-                <line x1="276" y1="240" x2="432" y2="150" stroke="#16213e" stroke-width="8" />
-            </g>
+                <!-- СЛОЙ 1 (нижний): РЁБРА обеих фигур. -->
+                <g id="shape-left-edges-butterfly" class="shape-group">
+                    <polygon class="shape-overlay" points="120,150 120,330 276,240"
+                             onclick="rotateShape('butterfly', 'left', 1)" />
+                    <line x1="120" y1="150" x2="120" y2="330" stroke="#16213e" stroke-width="8" />
+                    <line x1="120" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
+                    <line x1="276" y1="240" x2="120" y2="150" stroke="#16213e" stroke-width="8" />
+                </g>
 
-            <!-- СЛОЙ 2 (верхний): КРУЖКИ + ПОДСВЕТКА обеих фигур. Рисуются
-                 после слоя рёбер, значит лежат поверх ВСЕХ рёбер, включая
-                 рёбра соседней фигуры. pointer-events:none — клики проходят
-                 "сквозь" них к слою рёбер ниже. -->
-            <g id="shape-left-circles" class="shape-group circles-layer">
-                <circle cx="120" cy="150" r="34" fill="url(#circle-glow)" />
-                <circle cx="120" cy="330" r="34" fill="url(#circle-glow)" />
-                <circle cx="276" cy="240" r="34" fill="url(#circle-glow)" />
-                <circle cx="120" cy="150" r="20" fill="#16213e" />
-                <circle cx="120" cy="330" r="20" fill="#16213e" />
-                <circle cx="276" cy="240" r="20" fill="#16213e" />
-            </g>
+                <g id="shape-right-edges-butterfly" class="shape-group">
+                    <polygon class="shape-overlay" points="432,150 432,330 276,240"
+                             onclick="rotateShape('butterfly', 'right', 1)" />
+                    <line x1="432" y1="150" x2="432" y2="330" stroke="#16213e" stroke-width="8" />
+                    <line x1="432" y1="330" x2="276" y2="240" stroke="#16213e" stroke-width="8" />
+                    <line x1="276" y1="240" x2="432" y2="150" stroke="#16213e" stroke-width="8" />
+                </g>
 
-            <g id="shape-right-circles" class="shape-group circles-layer">
-                <circle cx="432" cy="150" r="34" fill="url(#circle-glow)" />
-                <circle cx="432" cy="330" r="34" fill="url(#circle-glow)" />
-                <circle cx="276" cy="240" r="34" fill="url(#circle-glow)" />
-                <circle cx="432" cy="150" r="20" fill="#16213e" />
-                <circle cx="432" cy="330" r="20" fill="#16213e" />
-                <circle cx="276" cy="240" r="20" fill="#16213e" />
-            </g>
+                <!-- СЛОЙ 2 (верхний): КРУЖКИ + ПОДСВЕТКА обеих фигур. -->
+                <g id="shape-left-circles-butterfly" class="shape-group circles-layer">
+                    <circle cx="120" cy="150" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="120" cy="330" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="276" cy="240" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="120" cy="150" r="20" fill="#16213e" />
+                    <circle cx="120" cy="330" r="20" fill="#16213e" />
+                    <circle cx="276" cy="240" r="20" fill="#16213e" />
+                </g>
 
-            <!-- СЛОЙ 3: прямые-накладки поверх всего. Теперь каждая продолжена за одну из
-                 своих крайних точек, чтобы дотянуться до места, где стоит надпись
-                 "текущее/цель". Невидимы по умолчанию, появляются только когда сумма
-                 совпадает с целью. Геометрически лежат там же, где и рёбра треугольников,
-                 но это СВОЙ ОТДЕЛЬНЫЙ элемент, не часть вращающейся рамки — точки
-                 A/B/C/D/E физически никогда не двигаются (меняется только число в них),
-                 так что этим линиям не нужно никакого трансформа вообще. -->
-            <!-- СЛОЙ 3А: основная часть диагонали (вершина-вершина-вершина) — толще. -->
-            <polyline id="diagonal-overlay-diag1" class="diagonal-overlay" points="120,150 276,240 432,330" />
-            <polyline id="diagonal-overlay-diag2" class="diagonal-overlay" points="432,150 276,240 120,330" />
+                <g id="shape-right-circles-butterfly" class="shape-group circles-layer">
+                    <circle cx="432" cy="150" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="432" cy="330" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="276" cy="240" r="34" fill="url(#circle-glow-butterfly)" />
+                    <circle cx="432" cy="150" r="20" fill="#16213e" />
+                    <circle cx="432" cy="330" r="20" fill="#16213e" />
+                    <circle cx="276" cy="240" r="20" fill="#16213e" />
+                </g>
 
-            <!-- СЛОЙ 3Б: продолжение за крайнюю вершину до надписи — тоньше. -->
-            <polyline id="diagonal-overlay-ext-diag1" class="diagonal-overlay-extension" points="432,330 510,375" />
-            <polyline id="diagonal-overlay-ext-diag2" class="diagonal-overlay-extension" points="510,105 432,150" />
+                <!-- СЛОЙ 3: прямые-накладки диагоналей. -->
+                <polyline id="diagonal-overlay-diag1-butterfly" class="diagonal-overlay" points="120,150 276,240 432,330" />
+                <polyline id="diagonal-overlay-diag2-butterfly" class="diagonal-overlay" points="432,150 276,240 120,330" />
 
-            <!-- Надписи "текущее/цель" на концах продолжений диагоналей. -->
-            <text id="ratio-diag1" class="ratio-text sum-ok" x="510" y="375" text-anchor="middle" dominant-baseline="middle">9/9</text>
-            <text id="ratio-diag2" class="ratio-text sum-ok" x="510" y="105" text-anchor="middle" dominant-baseline="middle">9/9</text>
+                <polyline id="diagonal-overlay-ext-diag1-butterfly" class="diagonal-overlay-extension" points="432,330 510,375" />
+                <polyline id="diagonal-overlay-ext-diag2-butterfly" class="diagonal-overlay-extension" points="510,105 432,150" />
 
-            <!-- ЦИФРЫ: НЕЗАВИСИМЫ от рамок, всегда стоят на своих законных
-                 местах и никогда не вращаются. По одной на каждую ТОЧКУ
-                 (не на каждую фигуру) — значит, для общей C нужна только
-                 ОДНА подпись, а не две дублирующих. -->
-            <text id="text-A" class="value-text" x="120" y="150" text-anchor="middle" dominant-baseline="middle">1</text>
-            <text id="text-B" class="value-text" x="432" y="150" text-anchor="middle" dominant-baseline="middle">2</text>
-            <text id="text-C" class="value-text" x="276" y="240" text-anchor="middle" dominant-baseline="middle">3</text>
-            <text id="text-D" class="value-text" x="120" y="330" text-anchor="middle" dominant-baseline="middle">4</text>
-            <text id="text-E" class="value-text" x="432" y="330" text-anchor="middle" dominant-baseline="middle">5</text>
+                <text id="ratio-diag1-butterfly" class="ratio-text sum-ok" x="510" y="375" text-anchor="middle" dominant-baseline="middle">9/9</text>
+                <text id="ratio-diag2-butterfly" class="ratio-text sum-ok" x="510" y="105" text-anchor="middle" dominant-baseline="middle">9/9</text>
 
-        </svg>
-    </div>
+                <!-- ЦИФРЫ: независимы от рамок, по одной на точку. -->
+                <text id="text-A-butterfly" class="value-text" x="120" y="150" text-anchor="middle" dominant-baseline="middle">1</text>
+                <text id="text-B-butterfly" class="value-text" x="432" y="150" text-anchor="middle" dominant-baseline="middle">2</text>
+                <text id="text-C-butterfly" class="value-text" x="276" y="240" text-anchor="middle" dominant-baseline="middle">3</text>
+                <text id="text-D-butterfly" class="value-text" x="120" y="330" text-anchor="middle" dominant-baseline="middle">4</text>
+                <text id="text-E-butterfly" class="value-text" x="432" y="330" text-anchor="middle" dominant-baseline="middle">5</text>
+
+                <!-- СЛОЙ 4: курсоры других игроков НА ЭТОМ уровне. -->
+                <g id="remote-cursors-layer-butterfly"></g>
+
+            </svg>
+        </div>
+    </section>
+
+    <section class="level-section">
+        <h2>Созвездие Скорпиона</h2>
+        <p>Клик по пятиугольнику или по одному из треугольников — фигура физически поворачивается на 1 шаг.</p>
+
+        <div id="texture-test-pentagon">
+            <svg id="puzzle-svg-pentagon" width="560" height="730" viewBox="150 -50 560 730">
+
+                <defs>
+                    <radialGradient id="circle-glow-pentagon" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="58%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="65%" stop-color="#fff6d9" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#fff6d9" stop-opacity="0" />
+                    </radialGradient>
+                </defs>
+
+                <!-- СЛОЙ 1: РЁБРА всех трёх фигур (пятиугольник + 2 треугольника). -->
+                <g id="shape-pentagon-edges-pentagon" class="shape-group">
+                    <polygon class="shape-overlay" points="430,110 572.6,213.6 518.2,381.4 341.8,381.4 287.3,213.6"
+                             onclick="rotateShape('pentagon', 'pentagon', 1)" />
+                    <line x1="430" y1="110" x2="572.6" y2="213.6" stroke="#16213e" stroke-width="8" />
+                    <line x1="572.6" y1="213.6" x2="518.2" y2="381.4" stroke="#16213e" stroke-width="8" />
+                    <line x1="518.2" y1="381.4" x2="341.8" y2="381.4" stroke="#16213e" stroke-width="8" />
+                    <line x1="341.8" y1="381.4" x2="287.3" y2="213.6" stroke="#16213e" stroke-width="8" />
+                    <line x1="287.3" y1="213.6" x2="430" y2="110" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- Треугольник на стороне 1 (A-B), апекс F. -->
+                <g id="shape-top_wedge-edges-pentagon" class="shape-group">
+                    <polygon class="shape-overlay" points="430,110 572.6,213.6 591.1,38.2"
+                             onclick="rotateShape('pentagon', 'top_wedge', 1)" />
+                    <line x1="430" y1="110" x2="572.6" y2="213.6" stroke="#16213e" stroke-width="8" />
+                    <line x1="572.6" y1="213.6" x2="591.1" y2="38.2" stroke="#16213e" stroke-width="8" />
+                    <line x1="591.1" y1="38.2" x2="430" y2="110" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- Треугольник на стороне 3 (C-D), апекс G. -->
+                <g id="shape-bottom_wedge-edges-pentagon" class="shape-group">
+                    <polygon class="shape-overlay" points="518.2,381.4 341.8,381.4 430,534.1"
+                             onclick="rotateShape('pentagon', 'bottom_wedge', 1)" />
+                    <line x1="518.2" y1="381.4" x2="341.8" y2="381.4" stroke="#16213e" stroke-width="8" />
+                    <line x1="341.8" y1="381.4" x2="430" y2="534.1" stroke="#16213e" stroke-width="8" />
+                    <line x1="430" y1="534.1" x2="518.2" y2="381.4" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- СЛОЙ 2: КРУЖКИ + ПОДСВЕТКА всех трёх фигур (после рёбер —
+                     гарантированно выше рёбер любой другой фигуры). Точки A,B
+                     (общие с top_wedge) и C,D (общие с bottom_wedge) продублированы —
+                     ровно тот же приём, что и с точкой C в "бабочке": каждая фигура
+                     физически поворачивается как своё отдельное жёсткое тело, значит
+                     у каждой должна быть СВОЯ копия декоративного кружка в её общей
+                     вершине. -->
+                <g id="shape-pentagon-circles-pentagon" class="shape-group circles-layer">
+                    <circle cx="430" cy="110" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="572.6" cy="213.6" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="518.2" cy="381.4" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="341.8" cy="381.4" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="287.3" cy="213.6" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="430" cy="110" r="20" fill="#16213e" />
+                    <circle cx="572.6" cy="213.6" r="20" fill="#16213e" />
+                    <circle cx="518.2" cy="381.4" r="20" fill="#16213e" />
+                    <circle cx="341.8" cy="381.4" r="20" fill="#16213e" />
+                    <circle cx="287.3" cy="213.6" r="20" fill="#16213e" />
+                </g>
+
+                <g id="shape-top_wedge-circles-pentagon" class="shape-group circles-layer">
+                    <circle cx="430" cy="110" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="572.6" cy="213.6" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="591.1" cy="38.2" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="430" cy="110" r="20" fill="#16213e" />
+                    <circle cx="572.6" cy="213.6" r="20" fill="#16213e" />
+                    <circle cx="591.1" cy="38.2" r="20" fill="#16213e" />
+                </g>
+
+                <g id="shape-bottom_wedge-circles-pentagon" class="shape-group circles-layer">
+                    <circle cx="518.2" cy="381.4" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="341.8" cy="381.4" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="430" cy="534.1" r="34" fill="url(#circle-glow-pentagon)" />
+                    <circle cx="518.2" cy="381.4" r="20" fill="#16213e" />
+                    <circle cx="341.8" cy="381.4" r="20" fill="#16213e" />
+                    <circle cx="430" cy="534.1" r="20" fill="#16213e" />
+                </g>
+
+                <!-- СЛОЙ 3: линии-накладки (условия суммы), см. app/puzzle_levels.py:
+                     line1 = F-B-C-G (4 точки!), line2 = F-A-E, line3 = G-D-E. -->
+                <polyline id="diagonal-overlay-line1-pentagon" class="diagonal-overlay" points="591.1,38.2 572.6,213.6 518.2,381.4 430,534.1" />
+                <polyline id="diagonal-overlay-line2-pentagon" class="diagonal-overlay" points="591.1,38.2 430,110 287.3,213.6" />
+                <polyline id="diagonal-overlay-line3-pentagon" class="diagonal-overlay" points="430,534.1 341.8,381.4 287.3,213.6" />
+
+                <polyline id="diagonal-overlay-ext-line1-pentagon" class="diagonal-overlay-extension" points="430,534.1 385.0,612.1" />
+                <polyline id="diagonal-overlay-ext-line2-pentagon" class="diagonal-overlay-extension" points="287.3,213.6 222.6,260.6" />
+                <polyline id="diagonal-overlay-ext-line3-pentagon" class="diagonal-overlay-extension" points="287.3,213.6 262.6,137.5" />
+
+                <text id="ratio-line1-pentagon" class="ratio-text sum-ok" x="385.0" y="612.1" text-anchor="middle" dominant-baseline="middle">18/18</text>
+                <text id="ratio-line2-pentagon" class="ratio-text sum-ok" x="222.6" y="260.6" text-anchor="middle" dominant-baseline="middle">12/12</text>
+                <text id="ratio-line3-pentagon" class="ratio-text sum-ok" x="262.6" y="137.5" text-anchor="middle" dominant-baseline="middle">16/16</text>
+
+                <!-- ЦИФРЫ: независимы, по одной на КАЖДУЮ из 7 точек. -->
+                <text id="text-A-pentagon" class="value-text" x="430" y="110" text-anchor="middle" dominant-baseline="middle">1</text>
+                <text id="text-B-pentagon" class="value-text" x="572.6" y="213.6" text-anchor="middle" dominant-baseline="middle">2</text>
+                <text id="text-C-pentagon" class="value-text" x="518.2" y="381.4" text-anchor="middle" dominant-baseline="middle">3</text>
+                <text id="text-D-pentagon" class="value-text" x="341.8" y="381.4" text-anchor="middle" dominant-baseline="middle">4</text>
+                <text id="text-E-pentagon" class="value-text" x="287.3" y="213.6" text-anchor="middle" dominant-baseline="middle">5</text>
+                <text id="text-F-pentagon" class="value-text" x="591.1" y="38.2" text-anchor="middle" dominant-baseline="middle">6</text>
+                <text id="text-G-pentagon" class="value-text" x="430" y="534.1" text-anchor="middle" dominant-baseline="middle">7</text>
+
+                <!-- СЛОЙ 4: курсоры других игроков НА ЭТОМ уровне. -->
+                <g id="remote-cursors-layer-pentagon"></g>
+
+            </svg>
+        </div>
+    </section>
+
+    <section class="level-section">
+        <h2>Созвездие Тельца</h2>
+        <p>Клик по квадрату или по одному из треугольников — фигура физически поворачивается на 1 шаг.</p>
+
+        <div id="texture-test-square">
+            <svg id="puzzle-svg-square" width="560" height="600" viewBox="150 50 560 600">
+
+                <defs>
+                    <radialGradient id="circle-glow-square" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="58%" stop-color="#fff6d9" stop-opacity="0" />
+                        <stop offset="65%" stop-color="#fff6d9" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#fff6d9" stop-opacity="0" />
+                    </radialGradient>
+                </defs>
+
+                <!-- СЛОЙ 1: РЁБРА всех трёх фигур (квадрат + 2 треугольника).
+                     В отличие от пятиугольника, здесь квадрат касается каждого
+                     треугольника РОВНО В ОДНОЙ точке (A и B соответственно) — как
+                     в самой первой "бабочке" — а не целой гранью. -->
+                <g id="shape-quadrilateral-edges-square" class="shape-group">
+                    <polygon class="shape-overlay" points="340,320 520,320 520,500 340,500"
+                             onclick="rotateShape('square', 'quadrilateral', 1)" />
+                    <line x1="340" y1="320" x2="520" y2="320" stroke="#16213e" stroke-width="8" />
+                    <line x1="520" y1="320" x2="520" y2="500" stroke="#16213e" stroke-width="8" />
+                    <line x1="520" y1="500" x2="340" y2="500" stroke="#16213e" stroke-width="8" />
+                    <line x1="340" y1="500" x2="340" y2="320" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- Треугольник, касающийся квадрата в вершине A, апекс F. -->
+                <g id="shape-wedge_left-edges-square" class="shape-group">
+                    <polygon class="shape-overlay" points="340,320 237.8,157.1 430,150"
+                             onclick="rotateShape('square', 'wedge_left', 1)" />
+                    <line x1="340" y1="320" x2="237.8" y2="157.1" stroke="#16213e" stroke-width="8" />
+                    <line x1="237.8" y1="157.1" x2="430" y2="150" stroke="#16213e" stroke-width="8" />
+                    <line x1="430" y1="150" x2="340" y2="320" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- Треугольник, касающийся квадрата в вершине B, апекс G. Делит
+                     с wedge_left общую вершину E (ТА ЖЕ точка E=(430,150)) — как
+                     левый и правый треугольник в "бабочке" делили точку C. -->
+                <g id="shape-wedge_right-edges-square" class="shape-group">
+                    <polygon class="shape-overlay" points="520,320 430,150 622.2,157.1"
+                             onclick="rotateShape('square', 'wedge_right', 1)" />
+                    <line x1="520" y1="320" x2="430" y2="150" stroke="#16213e" stroke-width="8" />
+                    <line x1="430" y1="150" x2="622.2" y2="157.1" stroke="#16213e" stroke-width="8" />
+                    <line x1="622.2" y1="157.1" x2="520" y2="320" stroke="#16213e" stroke-width="8" />
+                </g>
+
+                <!-- СЛОЙ 2: КРУЖКИ + ПОДСВЕТКА всех трёх фигур. Точки A и B
+                     (общие с треугольниками) и E (общая МЕЖДУ двумя треугольниками)
+                     продублированы — та же логика, что и с точкой C в "бабочке":
+                     каждая фигура крутится как своё жёсткое тело, значит у каждой
+                     нужна СВОЯ копия декоративного кружка в общей вершине. -->
+                <g id="shape-quadrilateral-circles-square" class="shape-group circles-layer">
+                    <circle cx="340" cy="320" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="520" cy="320" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="520" cy="500" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="340" cy="500" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="340" cy="320" r="20" fill="#16213e" />
+                    <circle cx="520" cy="320" r="20" fill="#16213e" />
+                    <circle cx="520" cy="500" r="20" fill="#16213e" />
+                    <circle cx="340" cy="500" r="20" fill="#16213e" />
+                </g>
+
+                <g id="shape-wedge_left-circles-square" class="shape-group circles-layer">
+                    <circle cx="340" cy="320" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="237.8" cy="157.1" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="430" cy="150" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="340" cy="320" r="20" fill="#16213e" />
+                    <circle cx="237.8" cy="157.1" r="20" fill="#16213e" />
+                    <circle cx="430" cy="150" r="20" fill="#16213e" />
+                </g>
+
+                <g id="shape-wedge_right-circles-square" class="shape-group circles-layer">
+                    <circle cx="520" cy="320" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="430" cy="150" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="622.2" cy="157.1" r="34" fill="url(#circle-glow-square)" />
+                    <circle cx="520" cy="320" r="20" fill="#16213e" />
+                    <circle cx="430" cy="150" r="20" fill="#16213e" />
+                    <circle cx="622.2" cy="157.1" r="20" fill="#16213e" />
+                </g>
+
+                <!-- СЛОЙ 3: линии-накладки (условия суммы), см. app/puzzle_levels.py:
+                     line1 = F-A-D, line2 = G-B-C. Точка E сознательно ни в одну
+                     линию не входит (см. PROJECT_CONTEXT.md) — на неё нет
+                     накладки, только на F/A/D и G/B/C. -->
+                <polyline id="diagonal-overlay-line1-square" class="diagonal-overlay" points="237.8,157.1 340,320 340,500" />
+                <polyline id="diagonal-overlay-line2-square" class="diagonal-overlay" points="622.2,157.1 520,320 520,500" />
+
+                <polyline id="diagonal-overlay-ext-line1-square" class="diagonal-overlay-extension" points="340,500 340,560" />
+                <polyline id="diagonal-overlay-ext-line2-square" class="diagonal-overlay-extension" points="520,500 520,560" />
+
+                <text id="ratio-line1-square" class="ratio-text sum-ok" x="340" y="560" text-anchor="middle" dominant-baseline="middle">11/11</text>
+                <text id="ratio-line2-square" class="ratio-text sum-ok" x="520" y="560" text-anchor="middle" dominant-baseline="middle">12/12</text>
+
+                <!-- ЦИФРЫ: независимы, по одной на КАЖДУЮ из 7 точек. -->
+                <text id="text-A-square" class="value-text" x="340" y="320" text-anchor="middle" dominant-baseline="middle">1</text>
+                <text id="text-B-square" class="value-text" x="520" y="320" text-anchor="middle" dominant-baseline="middle">2</text>
+                <text id="text-C-square" class="value-text" x="520" y="500" text-anchor="middle" dominant-baseline="middle">3</text>
+                <text id="text-D-square" class="value-text" x="340" y="500" text-anchor="middle" dominant-baseline="middle">4</text>
+                <text id="text-E-square" class="value-text" x="430" y="150" text-anchor="middle" dominant-baseline="middle">5</text>
+                <text id="text-F-square" class="value-text" x="237.8" y="157.1" text-anchor="middle" dominant-baseline="middle">6</text>
+                <text id="text-G-square" class="value-text" x="622.2" y="157.1" text-anchor="middle" dominant-baseline="middle">7</text>
+
+                <!-- СЛОЙ 4: курсоры других игроков НА ЭТОМ уровне. -->
+                <g id="remote-cursors-layer-square"></g>
+
+            </svg>
+        </div>
+    </section>
 
     <script>
-        let values = { A: 1, B: 2, C: 3, D: 4, E: 5 };
+        // ============================================================
+        // Все игровые данные (values/shapes/lines) приходят ТОЛЬКО от
+        // сервера — ничего не хардкодим и не пересчитываем сами (см.
+        // PROJECT_CONTEXT.md). Единственное, что знает клиент от себя —
+        // это КАРТИНКА: пиксельные координаты, вокруг какой точки крутить
+        // рамку конкретной фигуры и сколько миллисекунд длится анимация.
+        //
+        // Раньше вся эта логика была "плоской" — одни глобальные
+        // переменные на единственную головоломку. Теперь на странице ДВЕ
+        // головоломки сразу, поэтому всё это состояние обёрнуто в объект
+        // "view" — один на каждый level_id ("butterfly", "pentagon"), и
+        // почти все функции ниже принимают view первым аргументом.
+        // ============================================================
 
-        // Глобальная блокировка: пока true — любые клики игнорируются.
-        let isAnimating = false;
-
-        // Длительность каждой фазы анимации (должны точно совпадать с CSS-transition):
         const FADE_DURATION_MS = 250;    // .value-text { transition: opacity 0.25s }
         const ROTATE_DURATION_MS = 1600; // .shape-group { transition: transform 1.6s }
+        const CURSOR_SEND_INTERVAL_MS = 50;
 
-        // Накопленный угол поворота каждой фигуры (растёт бесконечно, никогда
-        // не сбрасывается — это убирает "отскок" рамки).
-        let rotationState = { left: 0, right: 0 };
-
-        // Абсолютные координаты каждой точки — используются, чтобы МАТЕМАТИЧЕСКИ
-        // вычислить, куда попадает каждая вершина после поворота.
-        const VERTEX_COORDS = {
-            A: [120, 150],
-            B: [432, 150],
-            C: [276, 240],
-            D: [120, 330],
-            E: [432, 330],
+        // Центроиды фигур (точка, вокруг которой физически крутится рамка) —
+        // ПО КАЖДОМУ УРОВНЮ. Это чисто визуальные (пиксельные) данные, сервер
+        // о них ничего не знает и знать не должен.
+        const LEVEL_SHAPE_CENTROIDS = {
+            butterfly: {
+                left: [172, 240],
+                right: [380, 240],
+            },
+            pentagon: {
+                pentagon: [430, 260],
+                top_wedge: [531.23, 120.6],
+                bottom_wedge: [430.0, 432.3],
+            },
+            square: {
+                quadrilateral: [430, 410],
+                wedge_left: [335.93, 209.03],
+                wedge_right: [524.07, 209.03],
+            },
         };
 
-        const shapes = {
-            left: ["A", "C", "D"],
-            right: ["B", "E", "C"],
+        function createPuzzleView(levelId) {
+            return {
+                levelId: levelId,
+                values: {},                 // point_id -> число (от сервера)
+                currentLines: {},           // line_id -> {point_ids,sum,target,ok} (от сервера)
+                shapes: {},                 // shape_id -> [point_id,...] (от сервера)
+                isAnimating: false,
+                rotationState: {},          // shape_id -> накопленный угол (лениво, визуальное)
+                centroids: LEVEL_SHAPE_CENTROIDS[levelId],
+                svg: document.getElementById("puzzle-svg-" + levelId),
+                cursorLayer: document.getElementById("remote-cursors-layer-" + levelId),
+                remoteCursors: {},          // player_id -> {group, wasClicking}
+                pendingCursor: null,        // {x,y} — копится между отправками курсора
+                isMouseDown: false,
+            };
+        }
+
+        const puzzleViews = {
+            butterfly: createPuzzleView("butterfly"),
+            pentagon: createPuzzleView("pentagon"),
+            square: createPuzzleView("square"),
         };
 
-        const lines = {
-            diag1: { pointIds: ["A", "C", "E"], target: 9 },
-            diag2: { pointIds: ["B", "C", "D"], target: 9 },
-        };
-
-        // Центроид каждой фигуры — точка, вокруг которой вращается рамка.
-        const shapeCentroids = {
-            left: [172, 240],
-            right: [380, 240],
-        };
+        // id, который сервер присвоил ЭТОМУ подключению (общий на оба уровня —
+        // это же одно и то же соединение/игрок).
+        let myPlayerId = null;
 
         function rotationAroundPoint(px, py, angleDeg) {
             return `translate(${px}px, ${py}px) rotate(${angleDeg}deg) translate(${-px}px, ${-py}px)`;
         }
 
-        // Каждая фигура физически состоит из ДВУХ SVG-групп (рёбра и кружки,
-        // см. разметку выше — они разделены ради правильного порядка слоёв).
-        // Обе должны поворачиваться совершенно одинаково и одновременно.
-        function setShapeTransform(shapeId, transformStr) {
-            document.getElementById("shape-" + shapeId + "-edges").style.transform = transformStr;
-            document.getElementById("shape-" + shapeId + "-circles").style.transform = transformStr;
+        // Каждая фигура физически состоит из ДВУХ SVG-групп (рёбра и кружки) —
+        // обе поворачиваются совершенно одинаково и одновременно.
+        function setShapeTransform(view, shapeId, transformStr) {
+            document.getElementById(`shape-${shapeId}-edges-${view.levelId}`).style.transform = transformStr;
+            document.getElementById(`shape-${shapeId}-circles-${view.levelId}`).style.transform = transformStr;
         }
 
-        // Поворачивает точку (x,y) вокруг центра (cx,cy) на angleDeg — та же
-        // математика, что использует CSS rotate().
-        function rotatePoint(x, y, cx, cy, angleDeg) {
-            const rad = (angleDeg * Math.PI) / 180;
-            const dx = x - cx;
-            const dy = y - cy;
-            const cos = Math.cos(rad);
-            const sin = Math.sin(rad);
-            return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
-        }
+        // --- WebSocket: подключение к серверу как единому источнику правды ---
 
-        function rotateShape(shapeId, direction) {
-            if (isAnimating) {
+        const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
+        const socket = new WebSocket(wsProtocol + location.host + "/ws");
+
+        socket.addEventListener("open", () => {
+            console.log("WebSocket подключён");
+        });
+
+        socket.addEventListener("close", () => {
+            console.log("WebSocket отключён");
+        });
+
+        // Сервер присылает сообщения РАЗНЫХ типов по одному и тому же
+        // соединению — различаем их по полю "type" (см. app/main.py):
+        //   "welcome"      — разово, сразу после подключения: твой id/цвет
+        //   "state"        — состояние ОДНОГО уровня (снимок или чей-то ход),
+        //                    в поле "level_id" указано, какого именно
+        //   "cursor"       — кто-то из игроков подвинул мышь/нажал НАД
+        //                    КОНКРЕТНЫМ уровнем (тоже "level_id")
+        //   "cursor_leave" — игрок отключился, убрать его курсор со ВСЕХ
+        //                    уровней сразу
+        socket.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+
+            if (message.type === "welcome") {
+                myPlayerId = message.id;
                 return;
             }
-            isAnimating = true;
 
-            const pointIds = shapes[shapeId];
+            if (message.type === "cursor") {
+                const view = puzzleViews[message.level_id];
+                if (view) {
+                    updateRemoteCursor(view, message);
+                }
+                return;
+            }
 
-            // ПРЕЖДЕ любой анимации: вычисляем, какими будут значения ПОСЛЕ
-            // поворота (не меняя настоящие values — это чистое предсказание).
-            // Если какая-то диагональ сейчас горит, а после поворота перестанет совпадать
-            // с целью — гасим её ПРЯМО СЕЙЧАС, до начала анимации поворота.
-            const predictedValues = computeRotatedValues(shapeId, direction, values);
+            if (message.type === "cursor_leave") {
+                Object.values(puzzleViews).forEach(view => removeRemoteCursor(view, message.id));
+                return;
+            }
 
-            for (const lineId in lines) {
-                const line = lines[lineId];
-                const currentSum = line.pointIds.reduce((total, id) => total + values[id], 0);
-                const predictedSum = line.pointIds.reduce((total, id) => total + predictedValues[id], 0);
+            // message.type === "state" — относится к ОДНОМУ конкретному уровню.
+            const view = puzzleViews[message.level_id];
+            if (!view) {
+                return;
+            }
 
-                const wasOk = currentSum === line.target;
-                const willBeOk = predictedSum === line.target;
+            if (message.last_move === null) {
+                // Начальный снимок ЭТОГО уровня сразу после подключения —
+                // просто отрисовываем как есть, БЕЗ анимации.
+                view.shapes = message.shapes;
+                view.values = message.values;
+                view.currentLines = message.lines;
+                renderValues(view);
+                renderLines(view);
+                return;
+            }
 
+            handleServerMove(view, message);
+        });
+
+        // Отправить серверу желаемый поворот НА КОНКРЕТНОМ уровне. Сервер сам
+        // решает, применять его или проигнорировать — на клиенте мы только просим.
+        function requestRotate(levelId, shapeId, direction) {
+            socket.send(JSON.stringify({ type: "rotate", level_id: levelId, shape_id: shapeId, direction: direction }));
+        }
+
+        // Клик по фигуре (levelId теперь ОБЯЗАТЕЛЬНЫЙ первый параметр — на
+        // странице несколько головоломок, нужно понимать, какую именно
+        // крутят). Сама анимация запустится, когда придёт ответное сообщение
+        // по WebSocket (handleServerMove) — в том числе и для того клиента,
+        // который сделал клик, и для всех остальных одновременно.
+        function rotateShape(levelId, shapeId, direction) {
+            const view = puzzleViews[levelId];
+            if (view.isAnimating) {
+                return;
+            }
+            // Блокируем повторный клик ДО ответа сервера. Если сервер этот
+            // клик проигнорирует (кто-то другой оказался быстрее НА ЭТОМ ЖЕ
+            // уровне), флаг всё равно снимется, как только придёт broadcast
+            // с ЧУЖИМ ходом ПО ЭТОМУ уровню — broadcast получают все.
+            view.isAnimating = true;
+            requestRotate(levelId, shapeId, direction);
+        }
+
+        function hideTextAnimated(view, pointIds) {
+            pointIds.forEach(pointId => {
+                document.getElementById(`text-${pointId}-${view.levelId}`).style.opacity = "0";
+            });
+        }
+
+        function showTextAnimated(view, pointIds) {
+            pointIds.forEach(pointId => {
+                document.getElementById(`text-${pointId}-${view.levelId}`).style.opacity = "1";
+            });
+        }
+
+        // Включает/выключает подсветку одной линии (основная часть + тонкое
+        // продолжение + надпись "сумма/цель").
+        function setLineOverlayOk(view, lineId, ok) {
+            const overlayElement = document.getElementById(`diagonal-overlay-${lineId}-${view.levelId}`);
+            const overlayExtElement = document.getElementById(`diagonal-overlay-ext-${lineId}-${view.levelId}`);
+            const ratioElement = document.getElementById(`ratio-${lineId}-${view.levelId}`);
+
+            overlayElement.classList.toggle("diagonal-overlay-ok", ok);
+            overlayExtElement.classList.toggle("diagonal-overlay-ok", ok);
+            ratioElement.classList.toggle("sum-ok", ok);
+        }
+
+        // Обрабатывает сообщение сервера о ЧЬЁМ-ТО реальном повороте на
+        // уровне view.levelId. message.values/message.lines — уже готовый
+        // ИТОГОВЫЙ результат, посчитанный сервером.
+        function handleServerMove(view, message) {
+            const { shape_id: shapeId, direction } = message.last_move;
+            const pointIds = view.shapes[shapeId];
+
+            view.isAnimating = true;
+
+            // Этап 0: гасим линии, которые СЕЙЧАС подсвечены, но после хода
+            // перестанут совпадать с целью — ДО начала анимации поворота.
+            for (const lineId in message.lines) {
+                const wasOk = Boolean(view.currentLines[lineId] && view.currentLines[lineId].ok);
+                const willBeOk = message.lines[lineId].ok;
                 if (wasOk && !willBeOk) {
-                    document.getElementById("diagonal-overlay-" + lineId).classList.remove("diagonal-overlay-ok");
-                    document.getElementById("diagonal-overlay-ext-" + lineId).classList.remove("diagonal-overlay-ok");
-                    const ratioElement = document.getElementById("ratio-" + lineId);
-                    ratioElement.classList.remove("sum-ok");
+                    setLineOverlayOk(view, lineId, false);
                 }
             }
 
-            // Этап 1: плавно гасим цифры этой фигуры (0.25с). Гасить плавно теперь
-            // безопасно — текст больше не связан с вращающейся рамкой,
-            // ему некуда "ехать" вместе с ней без компенсации.
-            hideTextAnimated(pointIds);
+            // Этап 1: плавно гасим цифры этой фигуры (0.25с).
+            hideTextAnimated(view, pointIds);
 
             setTimeout(() => {
-                // Этап 2: цифры уже полностью погасли — теперь запускаем плавный
-                // физический поворот рамки (1.6с).
-                rotationState[shapeId] += direction * 120;
-                const angle = rotationState[shapeId];
+                // Этап 2: цифры уже погасли — запускаем физический поворот
+                // рамки (1.6с). Угол одного шага = 360° / число точек фигуры —
+                // обобщение вместо захардкоженных 120°: для треугольников
+                // (butterfly, оба wedge-а в pentagon) это по-прежнему 120°,
+                // а для пятиугольника (5 точек) — уже 72°, и никакого
+                // спецкода под конкретное число вершин не понадобилось.
+                const stepDegrees = 360 / pointIds.length;
+                view.rotationState[shapeId] = (view.rotationState[shapeId] || 0) + direction * stepDegrees;
+                const angle = view.rotationState[shapeId];
 
-                const [scx, scy] = shapeCentroids[shapeId];
-                setShapeTransform(shapeId, rotationAroundPoint(scx, scy, angle));
+                const [scx, scy] = view.centroids[shapeId];
+                setShapeTransform(view, shapeId, rotationAroundPoint(scx, scy, angle));
 
-                applyDataRotation(shapeId, direction);
+                view.values = message.values;
+                view.currentLines = message.lines;
 
                 setTimeout(() => {
-                    // Этап 3: рамка докрутилась — обновляем цифры (они всё ещё невидимы)
-                    // и плавно проявляем их обратно (0.25с).
-                    render();
-                    showTextAnimated(pointIds);
+                    // Этап 3: рамка докрутилась — обновляем цифры/подсветку и
+                    // плавно проявляем цифры обратно (0.25с).
+                    renderValues(view);
+                    renderLines(view);
+                    showTextAnimated(view, pointIds);
 
                     setTimeout(() => {
-                        isAnimating = false;
+                        view.isAnimating = false;
                     }, FADE_DURATION_MS);
                 }, ROTATE_DURATION_MS);
             }, FADE_DURATION_MS);
         }
 
-        function hideTextAnimated(pointIds) {
-            pointIds.forEach(pointId => {
-                document.getElementById("text-" + pointId).style.opacity = "0";
-            });
-        }
-
-        function showTextAnimated(pointIds) {
-            pointIds.forEach(pointId => {
-                document.getElementById("text-" + pointId).style.opacity = "1";
-            });
-        }
-
-        // Чистая функция: по заданному исходному состоянию чисел возвращает НОВОЕ состояние
-        // после поворота заданной фигуры — НЕ трогая никаких глобальных переменных.
-        // Используется и для предсказания (до анимации), и для реального применения.
-        function computeRotatedValues(shapeId, direction, sourceValues) {
-            const pointIds = shapes[shapeId];
-            const [cx, cy] = shapeCentroids[shapeId];
-            const angle = direction * 120;
-
-            const updatedValues = Object.assign({}, sourceValues);
-            const newAssignments = {};
-
-            pointIds.forEach(sourceId => {
-                const [ox, oy] = VERTEX_COORDS[sourceId];
-                const [rx, ry] = rotatePoint(ox, oy, cx, cy, angle);
-
-                let closestId = null;
-                let closestDistance = Infinity;
-                pointIds.forEach(candidateId => {
-                    const [cx2, cy2] = VERTEX_COORDS[candidateId];
-                    const distance = Math.hypot(rx - cx2, ry - cy2);
-                    if (distance < closestDistance) {
-                        closestDistance = distance;
-                        closestId = candidateId;
-                    }
-                });
-
-                newAssignments[closestId] = sourceValues[sourceId];
-            });
-
-            Object.assign(updatedValues, newAssignments);
-            return updatedValues;
-        }
-
-        function applyDataRotation(shapeId, direction) {
-            values = computeRotatedValues(shapeId, direction, values);
-        }
-
-        function render() {
-            for (const pointId in values) {
-                document.getElementById("text-" + pointId).textContent = values[pointId];
+        function renderValues(view) {
+            for (const pointId in view.values) {
+                document.getElementById(`text-${pointId}-${view.levelId}`).textContent = view.values[pointId];
             }
+        }
 
-            for (const lineId in lines) {
-                const line = lines[lineId];
-                const sum = line.pointIds.reduce((total, id) => total + values[id], 0);
+        function renderLines(view) {
+            for (const lineId in view.currentLines) {
+                const line = view.currentLines[lineId];
+                document.getElementById(`ratio-${lineId}-${view.levelId}`).textContent = line.sum + "/" + line.target;
+                setLineOverlayOk(view, lineId, line.ok);
+            }
+        }
 
-                const ratioElement = document.getElementById("ratio-" + lineId);
-                const overlayElement = document.getElementById("diagonal-overlay-" + lineId);
-                const overlayExtElement = document.getElementById("diagonal-overlay-ext-" + lineId);
-                ratioElement.textContent = sum + "/" + line.target;
+        // --- Presence: курсор мыши и клики, видимые всем остальным игрокам ---
+        // Теперь СВОЙ трекинг на КАЖДЫЙ уровень отдельно (у каждого своя
+        // система координат SVG) — мышь может быть только над ОДНИМ из них
+        // сразу, поэтому конфликтов нет: просто вешаем слушатели на оба <svg>.
 
-                if (sum === line.target) {
-                    ratioElement.classList.add("sum-ok");
-                    overlayElement.classList.add("diagonal-overlay-ok");
-                    overlayExtElement.classList.add("diagonal-overlay-ok");
-                } else {
-                    ratioElement.classList.remove("sum-ok");
-                    overlayElement.classList.remove("diagonal-overlay-ok");
-                    overlayExtElement.classList.remove("diagonal-overlay-ok");
+        function clientToSvgPoint(svg, clientX, clientY) {
+            const point = svg.createSVGPoint();
+            point.x = clientX;
+            point.y = clientY;
+            const ctm = svg.getScreenCTM();
+            const svgPoint = point.matrixTransform(ctm.inverse());
+            return [svgPoint.x, svgPoint.y];
+        }
+
+        function sendCursorUpdate(view, x, y, visible) {
+            if (socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+            socket.send(JSON.stringify({
+                type: "cursor",
+                level_id: view.levelId,
+                x: x,
+                y: y,
+                clicking: view.isMouseDown,
+                visible: visible,
+            }));
+        }
+
+        function setupCursorTracking(view) {
+            view.svg.addEventListener("mousemove", (event) => {
+                const [x, y] = clientToSvgPoint(view.svg, event.clientX, event.clientY);
+                view.pendingCursor = { x: x, y: y };
+            });
+
+            view.svg.addEventListener("mouseleave", () => {
+                view.pendingCursor = null;
+                sendCursorUpdate(view, 0, 0, false);
+            });
+
+            view.svg.addEventListener("mousedown", () => {
+                view.isMouseDown = true;
+                if (view.pendingCursor) {
+                    sendCursorUpdate(view, view.pendingCursor.x, view.pendingCursor.y, true);
                 }
+            });
+        }
+
+        // mouseup слушаем на document (а не на каждом <svg> отдельно) — если
+        // отпустить кнопку мыши уже ЗА пределами того SVG, где начали клик,
+        // isMouseDown иначе застрял бы в true навсегда.
+        document.addEventListener("mouseup", () => {
+            Object.values(puzzleViews).forEach(view => {
+                if (!view.isMouseDown) {
+                    return;
+                }
+                view.isMouseDown = false;
+                if (view.pendingCursor) {
+                    sendCursorUpdate(view, view.pendingCursor.x, view.pendingCursor.y, true);
+                }
+            });
+        });
+
+        // Один общий "тик" на оба уровня сразу — не шлём координаты на КАЖДЫЙ
+        // mousemove, а копим последнюю позицию и отправляем не чаще, чем раз
+        // в CURSOR_SEND_INTERVAL_MS.
+        setInterval(() => {
+            Object.values(puzzleViews).forEach(view => {
+                if (view.pendingCursor) {
+                    sendCursorUpdate(view, view.pendingCursor.x, view.pendingCursor.y, true);
+                }
+            });
+        }, CURSOR_SEND_INTERVAL_MS);
+
+        function updateRemoteCursor(view, message) {
+            if (message.visible === false) {
+                removeRemoteCursor(view, message.id);
+                return;
+            }
+
+            let entry = view.remoteCursors[message.id];
+            if (!entry) {
+                const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                dot.setAttribute("class", "cursor-dot");
+                dot.setAttribute("r", "7");
+                group.appendChild(dot);
+                view.cursorLayer.appendChild(group);
+
+                entry = { group: group, wasClicking: false };
+                view.remoteCursors[message.id] = entry;
+            }
+
+            const dot = entry.group.querySelector(".cursor-dot");
+            dot.setAttribute("cx", message.x);
+            dot.setAttribute("cy", message.y);
+            dot.setAttribute("fill", message.color);
+
+            if (message.clicking && !entry.wasClicking) {
+                spawnClickRipple(entry.group, message.x, message.y, message.color);
+            }
+            entry.wasClicking = Boolean(message.clicking);
+        }
+
+        function removeRemoteCursor(view, id) {
+            const entry = view.remoteCursors[id];
+            if (entry) {
+                entry.group.remove();
+                delete view.remoteCursors[id];
             }
         }
 
-        render();
+        function spawnClickRipple(group, x, y, color) {
+            const ripple = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            ripple.setAttribute("class", "cursor-ripple-anim");
+            ripple.setAttribute("cx", x);
+            ripple.setAttribute("cy", y);
+            ripple.setAttribute("stroke", color);
+            group.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 500);
+        }
 
-        // Инициализируем начальный transform рамок в составной форме
-        // (translate/rotate/translate) — чтобы первый клик анимировался
-        // так же гладко, как и все последующие.
-        Object.keys(shapeCentroids).forEach(shapeId => {
-            const [cx, cy] = shapeCentroids[shapeId];
-            setShapeTransform(shapeId, rotationAroundPoint(cx, cy, 0));
+        // --- Инициализация, общая на все уровни ---
+
+        Object.values(puzzleViews).forEach(view => {
+            // Начальный transform рамок в составной форме
+            // (translate/rotate/translate) — чтобы первый клик анимировался
+            // так же гладко, как и все последующие. Чисто визуально, от
+            // состояния головоломки не зависит — делаем сразу, не дожидаясь
+            // ответа от сервера.
+            Object.keys(view.centroids).forEach(shapeId => {
+                const [cx, cy] = view.centroids[shapeId];
+                setShapeTransform(view, shapeId, rotationAroundPoint(cx, cy, 0));
+            });
+
+            setupCursorTracking(view);
         });
     </script>
 

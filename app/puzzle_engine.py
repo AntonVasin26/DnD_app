@@ -7,6 +7,8 @@ PuzzleState — это состояние конкретной игровой с
 по ходу игры и должно быть общим для всех подключённых игроков.
 """
 
+import random
+
 from app.puzzle_models import Level
 
 
@@ -57,3 +59,37 @@ class PuzzleState:
             else:
                 raise ValueError(f"Неизвестная операция: {line.operation}")
         return True
+
+    def scramble(
+        self,
+        moves_per_shape: tuple[int, int] = (2, 5),
+        rng: random.Random | None = None,
+    ) -> None:
+        """
+        Перемешивает головоломку случайными поворотами — чтобы уровень при
+        запуске сервера не начинался уже решённым (иначе это не головоломка,
+        а просто картинка). Каждая фигура получает СЛУЧАЙНОЕ количество
+        случайных поворотов в диапазоне moves_per_shape (по умолчанию от 2
+        до 5), а порядок ходов между фигурами перемешан — примерно так же
+        хаотично, как если бы кто-то тыкал по обеим фигурам вслепую.
+
+        ВАЖНО: перемешивание использует ТОТ ЖЕ метод rotate(), которым
+        ходит игрок, — значит результат ГАРАНТИРОВАННО решаем. rotate()
+        обратим: применить direction=-1 — то же самое, что "отменить" один
+        rotate(direction=+1) той же фигуры. Значит любую перемешанную
+        последовательность можно размотать назад, применив те же ходы в
+        обратном порядке с противоположным знаком — то есть from любого
+        перемешанного состояния решение всегда достижимо (просто игрок не
+        знает заранее, каким именно путём).
+        """
+        rng = rng or random.Random()
+
+        planned_moves: list[str] = []
+        for shape_id in self.shapes_by_id:
+            count = rng.randint(*moves_per_shape)
+            planned_moves.extend([shape_id] * count)
+        rng.shuffle(planned_moves)
+
+        for shape_id in planned_moves:
+            direction = rng.choice((1, -1))
+            self.rotate(shape_id, direction)

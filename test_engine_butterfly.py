@@ -1,7 +1,9 @@
 """
 Тест на два треугольника с ОБЩЕЙ вершиной C ("бабочка").
 
-Геометрия:
+Геометрия (актуальная, синхронизирована с фронтендом и с
+app/puzzle_levels.py — см. пункт 15 плана в PROJECT_CONTEXT.md):
+
     A-------B
      \\     /
       \\ C /      <- C общая для обоих треугольников
@@ -9,57 +11,37 @@
      /     \\
     D-------E
 
-Треугольник 1 (верхний): A, B, C
-Треугольник 2 (нижний):  D, E, C
+Фигура "left" (левая): A, C, D
+Фигура "right" (правая): B, E, C
 
-Диагонали "прямоугольника" A-B-E-D:
-    line_diag_1: A и E
-    line_diag_2: B и D
+Диагонали идут ЧЕРЕЗ общую точку C:
+    diag1: A - C - E, target = 9
+    diag2: B - C - D, target = 9
 
-Обрати внимание: диагонали НЕ включают точку C напрямую — но C всё равно
-играет роль, потому что она общая вершина обеих фигур: когда мы поворачиваем
-треугольник 1, число из C "уходит" в A или B, то есть в точку, которая
-УЖЕ участвует в диагонали. Так фигуры оказываются связаны друг с другом.
+Обрати внимание: раньше здесь была УПРОЩЁННАЯ 2-точечная версия (диагонали
+A-E и B-D, БЕЗ точки C, target=6) — она не совпадала с тем, что давно
+показывает фронтенд-прототип. Теперь оба теста используют один и тот же
+объект BUTTERFLY_LEVEL из app/puzzle_levels.py, так что расхождений больше
+быть не может: если кто-то поменяет геометрию уровня, тест и фронтенд
+"разъедутся" сразу заметно (тест упадёт по смыслу), а не тихо.
 """
 
-from app.puzzle_models import Level, Point, Shape, Line
+from app.puzzle_levels import BUTTERFLY_LEVEL
 from app.puzzle_engine import PuzzleState
 
-level = Level(
-    id="butterfly",
-    name="Бабочка из двух треугольников",
-    points=[
-        Point(id="A", value=1),
-        Point(id="B", value=2),
-        Point(id="C", value=3),
-        Point(id="D", value=4),
-        Point(id="E", value=5),
-    ],
-    shapes=[
-        # Порядок обхода по кругу: A -> B -> C -> (снова A)
-        Shape(id="triangle_top", point_ids=["A", "B", "C"]),
-        # Порядок обхода: D -> E -> C -> (снова D)
-        Shape(id="triangle_bottom", point_ids=["D", "E", "C"]),
-    ],
-    lines=[
-        Line(id="diag_1", point_ids=["A", "E"], target=6),   # 1 + 5 = 6 ✓ на старте
-        Line(id="diag_2", point_ids=["B", "D"], target=6),   # 2 + 4 = 6 ✓ на старте
-    ],
-)
-
-state = PuzzleState(level)
+state = PuzzleState(BUTTERFLY_LEVEL)
 
 print("=== Старт ===")
 print("Значения:", state.values)
 print("Решено?", state.is_solved())
 
-print("\n=== Поворачиваем ТОЛЬКО верхний треугольник (+1) ===")
-state.rotate("triangle_top", direction=1)
+print("\n=== Поворачиваем ТОЛЬКО левую фигуру (+1) ===")
+state.rotate("left", direction=1)
 print("Значения:", state.values)
 print("Решено?", state.is_solved())
-print("(диагональ A-E должна была измениться, т.к. значение A сменилось)")
+print("(диагонали должны были измениться, т.к. A и C сменили значения)")
 
-print("\n=== Дополнительно поворачиваем нижний треугольник (+1) ===")
-state.rotate("triangle_bottom", direction=1)
+print("\n=== Дополнительно поворачиваем правую фигуру (+1) ===")
+state.rotate("right", direction=1)
 print("Значения:", state.values)
 print("Решено?", state.is_solved())
